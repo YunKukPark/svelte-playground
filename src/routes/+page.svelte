@@ -2,6 +2,7 @@
 	import { getSummary } from '$lib/queries/youtube.js';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { fade } from 'svelte/transition';
+	import { marked } from 'marked';
 
 	let youtubeUrl = '';
 	let prompt = '';
@@ -11,7 +12,6 @@
 		const regex =
 			/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
 		const match = url.match(regex);
-		console.log('match: ', match && match[1]);
 		return match ? match[1] : '';
 	};
 
@@ -20,13 +20,15 @@
 	$: summaryQuery = createQuery({
 		queryKey: ['summary', { videoId, prompt }],
 		queryFn: getSummary,
-		enabled: !!videoId // 수동으로 트리거할 수 있도록 설정
+		enabled: false
 	});
 
-	const handleSubmit = async () => {
-		const result = await $summaryQuery.refetch();
+	const renderMarkdown = (content: string) => {
+		return marked(content);
+	};
 
-		console.log(result.data);
+	const handleSubmit = async () => {
+		await $summaryQuery.refetch();
 	};
 </script>
 
@@ -35,7 +37,7 @@
 		<!-- Header -->
 		<header class="text-center">
 			<h1 class="text-2xl font-semibold text-gray-900">YouTube Summary</h1>
-			<p class="mt-2 text-sm text-gray-600">Get AI-powered summaries of YouTube videos</p>
+			<p class="mt-2 text-sm text-gray-600">YouTube 동영상의 AI 요약을 받아보세요</p>
 		</header>
 
 		<!-- YouTube Embed -->
@@ -68,12 +70,12 @@
 
 			<div class="space-y-2">
 				<label for="prompt" class="block text-sm font-medium text-gray-700">
-					Additional Instructions
+					추가로 더 물어보고 싶은걸 여기에 적어주세요 (선택 사항)
 				</label>
 				<textarea
 					id="prompt"
 					bind:value={prompt}
-					placeholder="e.g., Focus on technical details, Summarize key points..."
+					placeholder="예: 기술적인 세부사항에 집중해 주세요, 주요 포인트를 요약해 주세요..."
 					rows="3"
 					class="w-full rounded-md border border-gray-200 px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
 				></textarea>
@@ -81,7 +83,7 @@
 
 			<button
 				on:click={handleSubmit}
-				disabled={!videoId}
+				disabled={!videoId || $summaryQuery.isLoading}
 				class="w-full rounded-md bg-blue-500 px-4 py-2 font-semibold text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
 				>요약 생성</button
 			>
@@ -107,7 +109,8 @@
 						{#each $summaryQuery.data.detailedSummary as section}
 							<div class="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
 								<h3 class="mb-2 font-medium text-gray-800">{section.heading}</h3>
-								<p class="text-gray-600">{section.content}</p>
+								<!-- 마크다운 렌더링 적용 -->
+								{@html renderMarkdown(section.content)}
 								<span class="mt-1 text-sm text-gray-400">타임스탬프: {section.timestamp}</span>
 							</div>
 						{/each}
