@@ -5,15 +5,55 @@ import { anthropicClient } from '../config.js';
 import { isTextBlock } from './type.js';
 import { parseTranscriptXML } from './utils.js';
 
+const MAX_VIDEO_DURATION = 20 * 60; // 20분을 초 단위로 변환
+
 const fetchYoutubeTranscript = async (videoId: string) => {
-	const transcript = await YoutubeTranscript.fetchTranscript(videoId);
-	return transcript;
+	try {
+		const transcript = await YoutubeTranscript.fetchTranscript(videoId);
+
+		// 전체 동영상 길이 계산
+		const totalDuration = transcript.reduce((acc, segment) => acc + (segment.duration || 0), 0);
+
+		if (totalDuration > MAX_VIDEO_DURATION) {
+			// 20분까지만 트랜스크립트 추출
+			let currentDuration = 0;
+			const trimmedTranscript = [];
+
+			for (const segment of transcript) {
+				if (currentDuration + (segment.duration || 0) > MAX_VIDEO_DURATION) {
+					// 20분 초과 시 중단
+					break;
+				}
+				trimmedTranscript.push(segment);
+				currentDuration += segment.duration || 0;
+			}
+
+			// 잘린 트랜스크립트임을 표시
+			return {
+				transcript: trimmedTranscript,
+				isTruncated: true,
+				originalDuration: Math.floor(totalDuration / 60), // 분 단위로 변환
+				truncatedDuration: Math.floor(currentDuration / 60)
+			};
+		}
+
+		// 20분 이하의 영상은 전체 트랜스크립트 반환
+		return {
+			transcript: transcript,
+			isTruncated: false,
+			originalDuration: Math.floor(totalDuration / 60),
+			truncatedDuration: Math.floor(totalDuration / 60)
+		};
+	} catch (error) {
+		console.error('Error fetching transcript:', error);
+		throw new Error('Failed to fetch transcript');
+	}
 };
 
 const generateSummary = async (transcript: string, additionalPrompt?: string) => {
 	try {
 		const message = await anthropicClient.messages.create({
-			model: 'claude-3-opus-20240229',
+			model: 'claude-3-5-sonnet-latest',
 			max_tokens: 4096,
 			system: `You are an AI assistant that creates structured Korean summaries of YouTube video transcripts.
 Your analysis should be thorough yet concise, focusing on delivering maximum value to Korean viewers.
@@ -26,6 +66,7 @@ Please analyze the transcript and create a summary following this structure:
    - Identify key terms and their meanings
    - Note timestamps for significant moments
    - Capture any actionable takeaways
+   - summary에는 3개의 핵심 포인트만 포함하면 됩니다만 detailed_summary에는 모든 키워드를 포함해야 합니다.
 
 2. Response Format Requirements:
    - Use ONLY Korean language in the response
@@ -72,7 +113,7 @@ Please format your response using this exact XML structure:
 					role: 'user',
 					content: `Please summarize the following transcript:
           ${transcript}
-          ${additionalPrompt ? `\nAdditional instructions: ${additionalPrompt}` : ''}`
+          ${additionalPrompt ? `\nAdditional instructions: <additional_instruction>${additionalPrompt}</additional_instruction>` : ''}`
 				}
 			]
 		});
@@ -106,7 +147,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			throw error(400, 'Video ID is required');
 		}
 
-		const transcript = await fetchYoutubeTranscript(videoId);
+		const { transcript } = await fetchYoutubeTranscript(videoId);
 
 		const fullText = transcript.map(({ text }) => text).join(' ');
 		const summaries = await generateSummary(fullText, prompt);
