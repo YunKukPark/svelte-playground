@@ -46,6 +46,7 @@ const fetchYoutubeTranscript = async (videoId: string) => {
 		};
 	} catch (error) {
 		console.error('Error fetching transcript:', error);
+
 		throw new Error('Failed to fetch transcript');
 	}
 };

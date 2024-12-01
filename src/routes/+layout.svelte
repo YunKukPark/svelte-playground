@@ -17,9 +17,12 @@
 
 <svelte:head>
 	<title>AI Youtube Docent</title>
-	<meta name="og:title" content="AI YouTube Docent" />
-	<meta name="og:description" content="YouTube 동영상의 AI 요약을 받아보세요" />
-	<meta name="og:image" content="/og-image.svg" />
+	<meta property="og:title" content="AI YouTube Docent" />
+	<meta
+		property="og:image"
+		content="https://github.com/user-attachments/assets/24dc1bae-93ba-48db-ae61-04ca31d72361"
+	/>
+	<meta property="og:description" content="YouTube 동영상의 AI 요약을 받아보세요" />
 </svelte:head>
 
 <QueryClientProvider client={queryClient}>
